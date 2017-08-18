@@ -5,6 +5,7 @@
 */
 
 #include <LiquidCrystal.h>
+#include "from_plc.hpp"
 #include <avr/wdt.h>
 #include <avr/delay.h>
 
@@ -51,7 +52,7 @@ void loop() {
 		lcd.print(millis());
 	}
 	else {
-		pressure_reading_deciP = (41 * (uint16_t)analogRead(pressure_pin) + 57) / 84;
+		pressure_reading_deciP = (41 * (uint16_t)analogRead(pressure_pin) + 57) / 42;
 		char analog_reading_str[4];
 		sprintf(analog_reading_str, "%4d", pressure_reading_deciP);
 		if (analog_reading_str[2] == ' ') analog_reading_str[2] = '0';
@@ -78,11 +79,11 @@ ISR(WDT_vect) {
 		digitalWrite(buzzer_pin, HIGH);
 		digitalWrite(led_red_pin, HIGH);
 		digitalWrite(led_green_pin, LOW);
-		_delay_ms(500);
+		_delay_ms(100);
 		digitalWrite(buzzer_pin, LOW);
 		digitalWrite(led_red_pin, LOW);
 		digitalWrite(led_green_pin, HIGH);
-		_delay_ms(500);
+		_delay_ms(100);
 	}
 }
 
