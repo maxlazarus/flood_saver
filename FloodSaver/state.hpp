@@ -12,6 +12,7 @@ namespace flood_saver {
 
 	struct Outputs {
 		
+		char message[8];
 		bool valve_open;
 		bool alarm_audio_on;
 		bool leak_alarm_on;
@@ -54,6 +55,7 @@ namespace flood_saver {
 
 	void StateMachine::valve_closed_reset(Inputs& in, Outputs& out) {
 		
+		memcpy(out.message, "Reset   ", 8);
 		timer_1 = 0;
 		timer_2 = 0;
 
@@ -66,19 +68,18 @@ namespace flood_saver {
 
 	void StateMachine::valve_closed_idle(Inputs & in, Outputs & out) {
 		
+		memcpy(out.message, "Idle    ", 8);
 		out.valve_open = false;
 
-		if ((in.delta_P > DELTA_P_USE_MIN) && (in.delta_P < DELTA_P_QUIESCENT_MAX)) {
-			out.leak_alarm_on;
+		if ((in.delta_P > DELTA_P_USE_MIN) && (in.delta_P < DELTA_P_QUIESCENT_MAX))		
 			current_state = &StateMachine::valve_closed_counting;
-		}
-		else if (in.P < 45) {
+		else if (in.P < P_VALVE_CLOSED_MIN)
 			current_state = &StateMachine::valve_open_counting;
-		}
 	}
 
 	void StateMachine::valve_closed_counting(Inputs& in, Outputs& out) {
 		
+		memcpy(out.message, "Counting", 8);
 		timer_1 += in.delta_t;
 
 		if (in.delta_P < DELTA_P_USE_MIN)
@@ -93,6 +94,7 @@ namespace flood_saver {
 
 	void StateMachine::valve_open_counting(Inputs& in, Outputs& out) {
 		
+		memcpy(out.message, "Counting", 8);
 		timer_2 += in.delta_t;
 		out.valve_open = true;
 		
@@ -114,6 +116,7 @@ namespace flood_saver {
 
 	void StateMachine::water_source_fault(Inputs& in, Outputs& out) {
 
+		memcpy(out.message, "WaterSrc", 8);
 		out.water_source_alarm_on = true;
 
 		if (in.reset_button)
@@ -122,6 +125,7 @@ namespace flood_saver {
 
 	void StateMachine::valve_closed_alarmed(Inputs& in, Outputs& out) {
 
+		memcpy(out.message, "Alarm   ", 8);
 		out.valve_open = false;
 		out.leak_alarm_on = true;
 		out.alarm_audio_on = true;
@@ -132,14 +136,15 @@ namespace flood_saver {
 
 	void StateMachine::valve_closed_muted(Inputs& in, Outputs& out) {
 
+		memcpy(out.message, "Muted   ", 8);
 		out.alarm_audio_on = false;
 
 		if (in.reset_button)
-			current_state = &StateMachine::valve_closed_muted;
+			current_state = &StateMachine::valve_closed_reset;
 	}
 
-	const int32_t StateMachine::DELTA_P_QUIESCENT_MAX(300);
-	const int32_t StateMachine::DELTA_P_USE_MIN(3000);
+	const int32_t StateMachine::DELTA_P_QUIESCENT_MAX(-300);
+	const int32_t StateMachine::DELTA_P_USE_MIN(-3000);
 	const int32_t StateMachine::P_VALVE_OPEN_MAX(65);
 	const int32_t StateMachine::P_VALVE_CLOSED_MIN(45);
 	const int32_t StateMachine::P_VALVE_SOURCE_MIN(35);

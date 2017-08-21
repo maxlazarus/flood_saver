@@ -30,7 +30,7 @@ const byte
 
 byte button_0, button_1;
 int32_t last_pressure_reading_mpsi, pressure_reading_mpsi;
-bool button_0_pressed, button_1_pressed;
+volatile bool button_0_pressed, button_1_pressed;
 uint32_t last_time, current_time, time_elapsed_ms;
 
 flood_saver::StateMachine state_machine;
@@ -48,14 +48,11 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(button_0_pin), button_0_interrupt, FALLING);
 	attachInterrupt(digitalPinToInterrupt(button_1_pin), button_1_interrupt, FALLING);
 	
-	//
 	byte watchdog_register_value = (1 << WDIE) | (1 << WDP3) | (1 << WDP0);
 	cli();
 	WDTCSR = (1 << WDCE) | (1 << WDE);
 	WDTCSR = watchdog_register_value;
 	sei();
-
-	//wdt_enable(WDTO_2S);
 
 	last_pressure_reading_mpsi = 0;
 	last_time = millis();
@@ -68,23 +65,23 @@ struct P_t_record {
 };
 
 P_t_record test1[] = {
+	{ 78000, 5001 },
+	{ 76000, 5001 },
+	{ 74000, 5001 },
+	{ 72000, 5001 },
+	{ 70000, 5001 },
+	{ 68000, 5001 },
+	{ 66000, 5001 },
+	{ 64000, 5001 },
+	{ 62000, 5001 },
 	{ 60000, 5001 },
-	{ 59000, 5001 },
 	{ 58000, 5001 },
-	{ 57000, 5001 },
-	{ 57000, 5001 },
 	{ 56000, 5001 },
-	{ 55000, 5001 },
 	{ 54000, 5001 },
-	{ 53000, 5001 },
 	{ 52000, 5001 },
-	{ 51000, 5001 },
 	{ 50000, 5001 },
-	{ 49000, 5001 },
 	{ 48000, 5001 },
-	{ 47000, 5001 },
-	{ 46000, 5001 },
-	{ 45000, 5001 }
+	{ 46000, 5001 }
 };
 
 void read_pressure_and_time(int32_t& P_mpsi, uint32_t& delta_t_ms) {
@@ -115,13 +112,25 @@ void loop() {
 	inputs.delta_P = (1000 * (pressure_reading_mpsi - last_pressure_reading_mpsi)) / static_cast<int32_t>(time_elapsed_ms);
 	inputs.delta_t = time_elapsed_ms;
 	inputs.reset_button = button_1_pressed;
+	button_1_pressed = false;
 	inputs.away_switch_on = button_0_pressed;
+	button_0_pressed = false;
 
 	state_machine.run(inputs, outputs);
 	
 	lcd.setCursor(0, 0);
 	lcd.print(inputs.delta_t);
 	lcd.print("    ");
+
+	lcd.setCursor(8, 0);
+	lcd.print(outputs.message[0]);
+	lcd.print(outputs.message[1]);
+	lcd.print(outputs.message[2]);
+	lcd.print(outputs.message[3]);
+	lcd.print(outputs.message[4]);
+	lcd.print(outputs.message[5]);
+	lcd.print(outputs.message[6]);
+	lcd.print(outputs.message[7]);
 
 	lcd.setCursor(0, 1);
 	lcd.print(inputs.P);
