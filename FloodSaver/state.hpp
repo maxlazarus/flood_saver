@@ -94,13 +94,14 @@ namespace flood_saver {
 
 	void StateMachine::valve_open_counting(Inputs& in, Outputs& out) {
 		
-		memcpy(out.message, "Counting", 8);
+		memcpy(out.message, "Opened  ", 8);
 		timer_2 += in.delta_t;
 		out.valve_open = true;
 		
-		if (in.P > P_VALVE_OPEN_MAX)
+		if (in.P > P_VALVE_OPEN_MAX) {
+			timer_2 = 0;
 			current_state = &StateMachine::valve_closed_idle;
-		else if (in.P < P_VALVE_SOURCE_MIN)
+		} else if (in.P < P_VALVE_SOURCE_MIN)
 			current_state = &StateMachine::water_source_fault;
 		else {
 			if (in.away_switch_on) {
@@ -145,9 +146,9 @@ namespace flood_saver {
 
 	const int32_t StateMachine::DELTA_P_QUIESCENT_MAX(-300);
 	const int32_t StateMachine::DELTA_P_USE_MIN(-3000);
-	const int32_t StateMachine::P_VALVE_OPEN_MAX(65);
-	const int32_t StateMachine::P_VALVE_CLOSED_MIN(45);
-	const int32_t StateMachine::P_VALVE_SOURCE_MIN(35);
+	const int32_t StateMachine::P_VALVE_OPEN_MAX(65000);
+	const int32_t StateMachine::P_VALVE_CLOSED_MIN(45000);
+	const int32_t StateMachine::P_VALVE_SOURCE_MIN(35000);
 
 	const uint32_t StateMachine::T_VALVE_OPEN_AWAY(30000);
 	const uint32_t StateMachine::T_VALVE_OPEN_HOME(1200000);

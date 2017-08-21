@@ -65,6 +65,11 @@ struct P_t_record {
 };
 
 P_t_record test1[] = {
+	{ 36000, 5001 },
+	{ 37000, 5001 },
+	{ 38000, 5001 },
+	{ 39000, 5001 },
+	{ 40000, 5001 },
 	{ 78000, 5001 },
 	{ 76000, 5001 },
 	{ 74000, 5001 },
@@ -95,7 +100,7 @@ void read_pressure_and_time(int32_t& P_mpsi, uint32_t& delta_t_ms) {
 	else {
 		static uint32_t index;
 		P_t_record* test = test1;
-		index = (index + 1) % 17;
+		index = (index + 1) % 22;
 		P_mpsi = test[index].P_ms;
 		delta_t_ms = test[index].delta_t_ms;
 	}
@@ -113,7 +118,7 @@ void loop() {
 	inputs.delta_t = time_elapsed_ms;
 	inputs.reset_button = button_1_pressed;
 	button_1_pressed = false;
-	inputs.away_switch_on = button_0_pressed;
+	inputs.away_switch_on = ! button_0_pressed;
 	button_0_pressed = false;
 
 	state_machine.run(inputs, outputs);
