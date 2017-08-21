@@ -5,7 +5,7 @@
 */
 
 #include <LiquidCrystal.h>
-#include "from_plc.hpp"
+#include "state.hpp"
 #include <avr/wdt.h>
 #include <avr/delay.h>
 
@@ -29,11 +29,13 @@ const byte
 	pressure_pin	= A0;
 
 byte button_0, button_1;
-int32_t pressure_reading_mpsi;
+int32_t last_pressure_reading_mpsi, pressure_reading_mpsi;
 bool button_0_pressed, button_1_pressed;
 uint32_t last_time, current_time, time_elapsed_ms;
 
-flood_saver::StateData globals = {};
+flood_saver::StateMachine state_machine;
+flood_saver::Inputs inputs;
+flood_saver::Outputs outputs;
 
 void setup() {
 	lcd.begin(16, 2);
@@ -55,20 +57,9 @@ void setup() {
 
 	//wdt_enable(WDTO_2S);
 
+	last_pressure_reading_mpsi = 0;
 	last_time = millis();
 	read_pressure_and_time(pressure_reading_mpsi, time_elapsed_ms);
-	
-	// Audio alarm shutoff test
-	/*
-	globals.x1 = false;
-	globals.x2 = false;
-	globals.audio_alarm_on = true;
-	globals.valve_104_open = false;
-	*/
-
-	// test1
-	globals.x1 = true;
-	// globals.water_supply_alarm_on = true;
 }
 
 struct P_t_record {
@@ -115,64 +106,46 @@ void read_pressure_and_time(int32_t& P_mpsi, uint32_t& delta_t_ms) {
 
 void loop() {
 
-	globals.x2 = button_1_pressed;
-	globals.x3 = button_0_pressed;
-	
+	last_pressure_reading_mpsi = pressure_reading_mpsi;
 	read_pressure_and_time(pressure_reading_mpsi, time_elapsed_ms);
-	globals.current_pressure_mpsi = pressure_reading_mpsi;
-
-	if (globals.timer_t1_initiated) 
-		globals.timer_t1_ms += static_cast<uint32_t>(time_elapsed_ms);
-
-	if (globals.five_second_timer_t2_initiated) 
-		globals.five_second_timer_t2_ms += static_cast<uint32_t>(time_elapsed_ms);
 
 	_delay_ms(1000); //DEBUG
-	flood_saver::main_routine(globals);
+
+	inputs.P = pressure_reading_mpsi;
+	inputs.delta_P = (1000 * (pressure_reading_mpsi - last_pressure_reading_mpsi)) / static_cast<int32_t>(time_elapsed_ms);
+	inputs.delta_t = time_elapsed_ms;
+	inputs.reset_button = button_1_pressed;
+	inputs.away_switch_on = button_0_pressed;
+
+	state_machine.run(inputs, outputs);
 	
 	lcd.setCursor(0, 0);
-	lcd.print(time_elapsed_ms);
-	lcd.print("    ");
-	lcd.setCursor(8, 0);
-	lcd.print("S");
-	if (globals.subroutine1_called) lcd.print("1");
-	if (globals.subroutine2_called) lcd.print("2");
-	lcd.print(" ");
-	if (globals.water_supply_alarm_on) lcd.print("WS ");
-	if (globals.x4)
-		lcd.print("A");
-	else
-		lcd.print("H");
-	lcd.setCursor(0, 1);
-	lcd.print(pressure_reading_mpsi);
-	lcd.print("    ");
-	lcd.setCursor(8, 1);
-	lcd.print("T");
-	if (globals.timer_t1_initiated) lcd.print('1');
-	if (globals.five_second_timer_t2_initiated) {
-		lcd.print('2');
-		lcd.print('-');
-		lcd.print(globals.counter_ct1);
-	}
-	if (globals.leak_detected) lcd.print("!");
-	if (globals.TRACE) lcd.print('*');
+	lcd.print(inputs.delta_t);
 	lcd.print("    ");
 
-	if (globals.valve_104_open) {
+	lcd.setCursor(0, 1);
+	lcd.print(inputs.P);
+	lcd.print("    ");
+
+	lcd.setCursor(8, 1);
+	lcd.print(inputs.delta_P);
+	lcd.print("    ");
+
+	if (outputs.valve_open) {
 		digitalWrite(led_green_pin, HIGH);
 	}
 	else {
 		digitalWrite(led_green_pin, LOW);
 	}
 
-	if (globals.leak_alarm_on) {
+	if (outputs.leak_alarm_on) {
 		digitalWrite(led_red_pin, HIGH);
 	}
 	else {
 		digitalWrite(led_red_pin, LOW);
 	}
 
-	if (globals.audio_alarm_on) {
+	if (outputs.alarm_audio_on) {
 		digitalWrite(buzzer_pin, HIGH);
 	}
 	else {
@@ -203,15 +176,3 @@ void button_0_interrupt() {
 void button_1_interrupt() {
 	button_1_pressed = true;
 }
-
-/*
-char analog_reading_str[4];
-sprintf(analog_reading_str, "%4d", pressure_reading_deciP);
-if (analog_reading_str[2] == ' ') analog_reading_str[2] = '0';
-lcd.setCursor(11, 1);
-lcd.print(analog_reading_str[0]);
-lcd.print(analog_reading_str[1]);
-lcd.print(analog_reading_str[2]);
-lcd.print('.');
-lcd.print(analog_reading_str[3]);
-*/
