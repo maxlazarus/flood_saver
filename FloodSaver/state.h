@@ -38,7 +38,7 @@ namespace flood_saver {
 		uint32_t timer_1;
 		uint32_t timer_2;
 
-		// Constants
+		// Constants, defined at bottom of this file
 		static const int32_t DELTA_P_QUIESCENT_MAX;	// milli-psi/second
 		static const int32_t DELTA_P_USE_MIN;		// milli-psi/second
 		static const int32_t P_VALVE_OPEN_MAX;		// milli-psi
@@ -94,8 +94,8 @@ namespace flood_saver {
 		
 		// Put current timer count into message in a super primitive way
 		memcpy(out.message, "Count   ", 8);
-		char first_digit  = static_cast<char>(uint32_t('0') + (timer_1 / 10000));
-		char second_digit = static_cast<char>(uint32_t('0') + ((timer_1 / 1000) % 10));
+		char first_digit  = static_cast<char>(48 + (timer_1 / 10000));
+		char second_digit = static_cast<char>(48 + ((timer_1 / 1000) % 10));
 		out.message[6] = first_digit == '0'? ' ' : first_digit;
 		out.message[7] = second_digit;
 
@@ -167,13 +167,13 @@ namespace flood_saver {
 			current_state = &StateMachine::valve_closed_reset;
 	}
 
-	const int32_t StateMachine::DELTA_P_QUIESCENT_MAX(-300);
-	const int32_t StateMachine::DELTA_P_USE_MIN(-3000);
-	const int32_t StateMachine::P_VALVE_OPEN_MAX(65000);
-	const int32_t StateMachine::P_VALVE_CLOSED_MIN(45000);
-	const int32_t StateMachine::P_VALVE_SOURCE_MIN(35000);
+	const int32_t StateMachine::DELTA_P_QUIESCENT_MAX	(-300);
+	const int32_t StateMachine::DELTA_P_USE_MIN			(-3000);
+	const int32_t StateMachine::P_VALVE_OPEN_MAX		(65000);
+	const int32_t StateMachine::P_VALVE_CLOSED_MIN		(45000);
+	const int32_t StateMachine::P_VALVE_SOURCE_MIN		(35000);
 
-	const uint32_t StateMachine::T_VALVE_OPEN_AWAY(30000);
-	const uint32_t StateMachine::T_VALVE_OPEN_HOME(1200000);
-	const uint32_t StateMachine::T_LEAK_TIMEOUT(50000);
+	const uint32_t StateMachine::T_VALVE_OPEN_AWAY		(30000);
+	const uint32_t StateMachine::T_VALVE_OPEN_HOME		(1200000);
+	const uint32_t StateMachine::T_LEAK_TIMEOUT			(50000);
 }

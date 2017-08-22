@@ -8,6 +8,40 @@
 	Arduino implementation of interface between state machine and physical I/O.
 	Requirements from patent "Smart Building Water Supply Management System With
 	Leak Detection And Flood Prevention".
+
+	Wiring instructions:
+
+		LCD VSS -- Ground
+		LCD VDD -- 5V
+		LCD V0	-- Middle terminal of 10k variable resistor 1 (VR1)
+		LCD RS	-- Arduino D12
+		LCD RW	-- Ground
+		LCD E	-- Arduino D11
+		LCD D0	-- NC
+		LCD D1	-- NC
+		LCD D2	-- NC
+		LCD D3	-- NC
+		LCD D4	-- Arduino D10
+		LCD D5	-- Arduino D9
+		LCD D6	-- Arduino D8
+		LCD D7	-- Arduino D7
+		Arduino D6	-- [+]Active Buzzer[-] -- Ground
+		Arduino D5	-- [A]Green LED[K] -- [2k resistor] -- Ground
+		OR use Arduino D5 for active high valve output
+		Arduino D4	-- [A]Red Led[K] -- [2k resistor] -- Ground
+		Arduino D3	-- [Normally open momentary switch Button 1] -- Ground
+		Arduino D2	-- [Normally open momentary switch Button 0] -- Ground
+		Arduino A0	-- Middle terminal of 10k variable resistor 2 (VR2)
+		OR use Arduino A0 for pressure voltage in (0-5V)
+		Left terminal of VR1 to ground, right terminal to 5V
+		Left terminal of VR2 to ground, right terminal to 5V
+
+	Usage instructions:
+
+		Button 1 connected to Arduino D3 mutes audio alarms and resets alarms
+		Button 0 switches between Home and Away modes
+		Sampling time is set to 1 second, so 50 measurements are needed to set the leak alarm
+			* This number can be altered in the 'state.h' file, T_LEAK_TIMEOUT at bottom of file
 */
 
 #include <LiquidCrystal.h>
