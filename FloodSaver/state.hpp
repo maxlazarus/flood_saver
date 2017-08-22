@@ -1,4 +1,14 @@
 #pragma once
+/*
+	Name:		state.hpp
+	Created:	8/16/2017 9:06:19 PM
+	Author:	Maxim Prokopenko
+
+	Written for Kirk Dobbs and Len Shankland.
+	State machine controlling inputs and outputs for the patent "Smart Building
+	Water Supply Management System With Leak Detection And Flood Prevention".
+*/
+
 namespace flood_saver {
 
 	struct Inputs {
@@ -22,15 +32,16 @@ namespace flood_saver {
 	class StateMachine {
 
 	private:
-		void (StateMachine::*current_state)(Inputs&, Outputs&) = NULL;
+		void (StateMachine::*current_state)(const Inputs&, Outputs&) = NULL;
 
 		uint32_t timer_1;
 		uint32_t timer_2;
 
+		// Constants
 		static const int32_t DELTA_P_QUIESCENT_MAX;	// milli-psi/second
 		static const int32_t DELTA_P_USE_MIN;		// milli-psi/second
 		static const int32_t P_VALVE_OPEN_MAX;		// milli-psi
-		static const int32_t P_VALVE_CLOSED_MIN;		// milli-psi
+		static const int32_t P_VALVE_CLOSED_MIN;	// milli-psi
 		static const int32_t P_VALVE_SOURCE_MIN;	// milli-psi
 
 		static const uint32_t T_VALVE_OPEN_AWAY;	// milliseconds
@@ -38,24 +49,25 @@ namespace flood_saver {
 		static const uint32_t T_LEAK_TIMEOUT;		// milliseconds
 
 		// State prototypes
-		inline void valve_closed_reset(Inputs& in, Outputs& out);
-		inline void valve_closed_idle(Inputs& in, Outputs& out);
-		inline void valve_closed_counting(Inputs& in, Outputs& out);
-		inline void valve_open_counting(Inputs& in, Outputs& out);
-		inline void water_source_fault(Inputs& in, Outputs& out);
-		inline void valve_closed_alarmed(Inputs& in, Outputs& out);
-		inline void valve_closed_muted(Inputs& in, Outputs& out);
+		inline void valve_closed_reset		(const Inputs& in, Outputs& out);
+		inline void valve_closed_idle		(const Inputs& in, Outputs& out);
+		inline void valve_closed_counting	(const Inputs& in, Outputs& out);
+		inline void valve_open_counting		(const Inputs& in, Outputs& out);
+		inline void water_source_fault		(const Inputs& in, Outputs& out);
+		inline void valve_closed_alarmed	(const Inputs& in, Outputs& out);
+		inline void valve_closed_muted		(const Inputs& in, Outputs& out);
 
 	public:
 		StateMachine() {
 			current_state = &StateMachine::valve_closed_idle;
 		}
-		void run(Inputs& in, Outputs& out) { (this->*current_state)(in, out); }
+		void run(const Inputs& in, Outputs& out) { (this->*current_state)(in, out); }
 	};
 
-	void StateMachine::valve_closed_reset(Inputs& in, Outputs& out) {
+	void StateMachine::valve_closed_reset(const Inputs& in, Outputs& out) {
 		
 		memcpy(out.message, "Reset   ", 8);
+
 		timer_1 = 0;
 		timer_2 = 0;
 
@@ -66,7 +78,7 @@ namespace flood_saver {
 		current_state = &StateMachine::valve_closed_idle;
 	}
 
-	void StateMachine::valve_closed_idle(Inputs & in, Outputs & out) {
+	void StateMachine::valve_closed_idle(const Inputs& in, Outputs& out) {
 		
 		memcpy(out.message, "Idle    ", 8);
 		out.valve_open = false;
@@ -77,9 +89,15 @@ namespace flood_saver {
 			current_state = &StateMachine::valve_open_counting;
 	}
 
-	void StateMachine::valve_closed_counting(Inputs& in, Outputs& out) {
+	void StateMachine::valve_closed_counting(const Inputs& in, Outputs& out) {
 		
-		memcpy(out.message, "Counting", 8);
+		// Put current timer count into message in a super primitive way
+		memcpy(out.message, "Count   ", 8);
+		char first_digit  = static_cast<char>(uint32_t('0') + (timer_1 / 10000));
+		char second_digit = static_cast<char>(uint32_t('0') + ((timer_1 / 1000) % 10));
+		out.message[6] = first_digit == '0'? ' ' : first_digit;
+		out.message[7] = second_digit;
+
 		timer_1 += in.delta_t;
 
 		if (in.delta_P < DELTA_P_USE_MIN)
@@ -92,9 +110,10 @@ namespace flood_saver {
 			current_state = &StateMachine::valve_closed_alarmed;
 	}
 
-	void StateMachine::valve_open_counting(Inputs& in, Outputs& out) {
+	void StateMachine::valve_open_counting(const Inputs& in, Outputs& out) {
 		
 		memcpy(out.message, "Opened  ", 8);
+
 		timer_2 += in.delta_t;
 		out.valve_open = true;
 		
@@ -105,26 +124,29 @@ namespace flood_saver {
 			current_state = &StateMachine::water_source_fault;
 		else {
 			if (in.away_switch_on) {
-				if (timer_2 > T_VALVE_OPEN_AWAY)
+				if (timer_2 > T_VALVE_OPEN_AWAY) {
 					current_state = &StateMachine::valve_closed_alarmed;
+				}
 			}
 			else {
-				if (timer_2 < T_VALVE_OPEN_HOME)
+				if (timer_2 > T_VALVE_OPEN_HOME) {
 					current_state = &StateMachine::valve_closed_alarmed;
+				}
 			}
 		}
 	}
 
-	void StateMachine::water_source_fault(Inputs& in, Outputs& out) {
+	void StateMachine::water_source_fault(const Inputs& in, Outputs& out) {
 
 		memcpy(out.message, "WaterSrc", 8);
 		out.water_source_alarm_on = true;
+		out.valve_open = false;
 
 		if (in.reset_button)
 			current_state = &StateMachine::valve_closed_reset;
 	}
 
-	void StateMachine::valve_closed_alarmed(Inputs& in, Outputs& out) {
+	void StateMachine::valve_closed_alarmed(const Inputs& in, Outputs& out) {
 
 		memcpy(out.message, "Alarm   ", 8);
 		out.valve_open = false;
@@ -135,7 +157,7 @@ namespace flood_saver {
 			current_state = &StateMachine::valve_closed_muted;
 	}
 
-	void StateMachine::valve_closed_muted(Inputs& in, Outputs& out) {
+	void StateMachine::valve_closed_muted(const Inputs& in, Outputs& out) {
 
 		memcpy(out.message, "Muted   ", 8);
 		out.alarm_audio_on = false;
