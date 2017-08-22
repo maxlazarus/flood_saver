@@ -1,4 +1,5 @@
 #pragma once
+#include "Arduino.h"
 /*
 	Name:		state.hpp
 	Created:	8/16/2017 9:06:19 PM
