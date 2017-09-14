@@ -80,6 +80,7 @@ const byte // System IO pins
 byte button_0, button_1;
 int32_t last_P, pressure_reading_mpsi;
 volatile bool button_0_pressed, button_1_pressed;
+uint32_t last_time_button_0, last_time_button_1;
 uint32_t last_time, current_time, time_elapsed_ms;
 
 // State machine components and interfacing structs
@@ -135,13 +136,24 @@ void read_pressure_and_time(int32_t& P_mpsi,  uint32_t& delta_t_ms) {
 void loop() {
 
 	// Read pressure and time, swap variables for pressure difference calc
-	last_P = inputs.P;
 	read_pressure_and_time(inputs.P, inputs.delta_t);
-	inputs.delta_P = (1000 * (inputs.P - last_P)) / static_cast<int32_t>(inputs.delta_t);
 
 	// Input switch data, button 1 is momentary on, button 0 toggles
-	inputs.reset_button = button_1_pressed;
-	if (button_0_pressed) inputs.away_switch_on = !inputs.away_switch_on;
+  uint32_t this_time = millis();
+  const uint32_t DEBOUNCE_MS = 250;
+
+  inputs.reset_button = false;
+  if (button_1_pressed && (digitalRead(button_1_pin) == 0)) {
+    if ((this_time - last_time_button_1) > DEBOUNCE_MS) {
+      inputs.reset_button = true;
+    }
+    last_time_button_1 = this_time;
+  }
+  
+  if (button_0_pressed && (digitalRead(button_0_pin) == 0)) {
+    if ((this_time - last_time_button_0) > DEBOUNCE_MS) inputs.away_switch_on = !inputs.away_switch_on;
+    last_time_button_0 = this_time;
+  }
 	button_0_pressed = button_1_pressed = false; // Reset momentary switch inputs
 	
 
@@ -185,10 +197,10 @@ void loop() {
 	lcd.setCursor(9, 1);
 	lcd.write(byte(0));
 	lcd.print(":");
-	if (inputs.delta_P < 0) lcd.print("-");
-	lcd.print(abs(inputs.delta_P / 1000));
+	if (outputs.delta_P < 0) lcd.print("-");
+	lcd.print(abs(outputs.delta_P / 1000));
 	lcd.print(".");
-	lcd.print(abs(inputs.delta_P / 100) % 10);
+	lcd.print(abs(outputs.delta_P / 100) % 10);
 	lcd.print("  ");
 
 	// Translate outputs from state machine into real world
@@ -198,7 +210,7 @@ void loop() {
 
 	wdt_reset();
 
-	_delay_ms(1000); // Samples every second right now
+  _delay_ms(100);
 }
 
 ISR(WDT_vect) {
@@ -217,7 +229,7 @@ ISR(WDT_vect) {
 		digitalWrite(buzzer_pin, LOW);
 		digitalWrite(led_red_pin, LOW);
 		digitalWrite(valve_pin, HIGH);
-		_delay_ms(100);
+		_delay_ms(200);
 	}
 }
 
