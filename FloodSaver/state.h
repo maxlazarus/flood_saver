@@ -28,6 +28,58 @@ namespace flood_saver {
 		bool water_source_alarm_on;
 	};
 
+  class Accumulator {
+  protected:
+    uint32_t i;
+    uint32_t timeout;
+  public:
+    Accumulator(uint32_t timeout) : timeout(timeout) {}
+
+    void update(uint32_t elapsed) {
+      i += elapsed;
+    }
+
+    void reset() {
+      i = 0;
+    }
+
+    void reset_keep_remainder() {
+      i = i % timeout;
+    }
+
+    uint32_t count() {
+      return i;
+    }
+
+    uint32_t overflows() {
+      return i / timeout;
+    }
+  };
+
+  class PressureAccumulator : public Accumulator {
+    int32_t last_P;
+  public:
+    PressureAccumulator(uint32_t timeout) : Accumulator(timeout) {}
+    
+    bool update(uint32_t elapsed, int32_t P, int32_t &flow_rate_result) {
+      i += elapsed;
+      if (last_P == 0) {
+        last_P = P;
+      } else if (overflows() > 0) {
+        flow_rate_result = (1000 * (P - last_P)) / static_cast<int32_t>(i);
+        last_P = P;
+        i = 0;
+        return true;
+      }
+      return false;
+    }
+
+    void clear() {
+      i = 0;
+      last_P = 0;
+    }
+  };
+  
 	class StateMachine {
 
 	private:
@@ -36,7 +88,7 @@ namespace flood_saver {
 		uint32_t timer_1; // milliseconds
 		uint32_t timer_2; // milliseconds
     int32_t last_P; // milli-psi
-    uint32_t timer_accumulator; // milliseconds
+    static PressureAccumulator pressure_accumulator; // milliseconds
 
 		// Constants, defined at bottom of this file
 		static const int32_t DELTA_P_QUIESCENT_MAX;	// milli-psi/second
@@ -58,11 +110,6 @@ namespace flood_saver {
 		inline void valve_closed_alarmed	(const Inputs& in, Outputs& out);
 		inline void valve_closed_muted		(const Inputs& in, Outputs& out);
 
-    // Computation functions
-    inline int32_t compute_delta_P(int32_t this_P, int32_t last_P, uint32_t delta_t) {
-      return (1000 * (this_P - last_P)) / static_cast<int32_t>(delta_t);
-    }
-
 	public:
 		StateMachine() {
 			current_state = &StateMachine::valve_closed_idle;
@@ -71,7 +118,8 @@ namespace flood_saver {
 	};
 
 	void StateMachine::valve_closed_reset(const Inputs& in, Outputs& out) {
-		
+
+    pressure_accumulator.update(in.delta_t, in.P, out.delta_P);
 		memcpy(out.message, "Reset   ", 8);
 
 		timer_1 = 0;
@@ -86,30 +134,17 @@ namespace flood_saver {
 
 	void StateMachine::valve_closed_idle(const Inputs& in, Outputs& out) {
 		
-		memcpy(out.message, "Idle    ", 8);
+		memcpy(out.message, "Off     ", 8);
 		out.valve_open = false;
 
-    bool delta_P_calculated = false;
-
-    if (timer_accumulator == 0) {
-      last_P = in.P;
-    }
-    if (timer_accumulator > 5000) {
-      out.delta_P = compute_delta_P(in.P, last_P, timer_accumulator); 
-      delta_P_calculated = true;
-      timer_accumulator = 0;
-    } 
-    else {
-      timer_accumulator += in.delta_t;
-    }
-
-    if (delta_P_calculated) {
+    if (pressure_accumulator.update(in.delta_t, in.P, out.delta_P)) {
 		  if ((out.delta_P > DELTA_P_USE_MIN) && (out.delta_P < DELTA_P_QUIESCENT_MAX)) {
 			  current_state = &StateMachine::valve_closed_counting;
 		  }
     }
-		else if (in.P < P_VALVE_CLOSED_MIN)
+		else if (in.P < P_VALVE_CLOSED_MIN) {
 			current_state = &StateMachine::valve_open_counting;
+		}
 	}
 
 	void StateMachine::valve_closed_counting(const Inputs& in, Outputs& out) {
@@ -121,53 +156,39 @@ namespace flood_saver {
 		out.message[6] = first_digit == '0'? ' ' : first_digit;
 		out.message[7] = second_digit;
 
-    bool delta_P_calculated = false;
-
-    if (timer_accumulator == 0) {
-      last_P = in.P;
-    }
-    if (timer_accumulator > 5000) {
-      out.delta_P = compute_delta_P(in.P, last_P, timer_accumulator); 
-      delta_P_calculated = true;
-      timer_1 += 1;
-      timer_accumulator = 0;
-    } 
-    else {
-      timer_accumulator += in.delta_t;
-    }
-
-    if (delta_P_calculated == true) {
+    if (pressure_accumulator.update(in.delta_t, in.P, out.delta_P)) {
+      timer_1 += 1;  
 		  if (out.delta_P < DELTA_P_USE_MIN) {
-        timer_accumulator = 0; 
 			  current_state = &StateMachine::valve_closed_idle;
 		  } 
 		  else if (out.delta_P > DELTA_P_QUIESCENT_MAX) {
-		    timer_accumulator = 0; 
 		  	current_state = &StateMachine::valve_closed_reset;
 		  }
     }
     else if (in.P < P_VALVE_CLOSED_MIN) {
-			timer_accumulator = 0; 
 			current_state = &StateMachine::valve_open_counting;
-    } else if (timer_1 >= T_LEAK_TIMEOUT) {
-      timer_accumulator = 0; 
+    }
+    if (timer_1 >= T_LEAK_TIMEOUT) {
 			current_state = &StateMachine::valve_closed_alarmed;
     }
 	}
 
 	void StateMachine::valve_open_counting(const Inputs& in, Outputs& out) {
 		
-		memcpy(out.message, "Opened  ", 8);
+		memcpy(out.message, "On      ", 8);
 
 		timer_2 += in.delta_t;
 		out.valve_open = true;
-		
+    pressure_accumulator.update(in.delta_t, in.P, out.delta_P);
+    
 		if (in.P > P_VALVE_OPEN_MAX) {
 			timer_2 = 0;
+      pressure_accumulator.clear();
 			current_state = &StateMachine::valve_closed_idle;
-		} else if (in.P < P_VALVE_SOURCE_MIN)
+		} else if (in.P < P_VALVE_SOURCE_MIN) {
+      timer_2 = 0;
 			current_state = &StateMachine::water_source_fault;
-		else {
+		} else {
 			if (in.away_switch_on) {
 				if (timer_2 > T_VALVE_OPEN_AWAY) {
 					current_state = &StateMachine::valve_closed_alarmed;
@@ -183,16 +204,43 @@ namespace flood_saver {
 
 	void StateMachine::water_source_fault(const Inputs& in, Outputs& out) {
 
+    pressure_accumulator.update(in.delta_t, in.P, out.delta_P);
 		memcpy(out.message, "WaterSrc", 8);
 		out.water_source_alarm_on = true;
-		out.valve_open = false;
+    out.alarm_audio_on = true;
+    timer_2 += in.delta_t;  
 
-		if (in.reset_button)
-			current_state = &StateMachine::valve_closed_reset;
+    if (in.away_switch_on) {
+      if (timer_2 > T_VALVE_OPEN_AWAY) {
+        out.valve_open = false;
+      }
+      else {
+        out.valve_open = true;
+      }
+    }
+    else {
+      if (timer_2 > T_VALVE_OPEN_HOME) {
+        out.valve_open = false;
+        current_state = &StateMachine::valve_closed_alarmed;
+      }
+      else { 
+        out.valve_open = true;
+      }
+    }
+
+    if (in.P > P_VALVE_SOURCE_MIN) {
+      out.water_source_alarm_on = false;
+      out.alarm_audio_on = false;
+      timer_2 = 0;
+      current_state = &StateMachine::valve_closed_idle;
+    } else if (in.reset_button) {
+			current_state = &StateMachine::valve_closed_muted;
+    }
 	}
 
 	void StateMachine::valve_closed_alarmed(const Inputs& in, Outputs& out) {
 
+		pressure_accumulator.update(in.delta_t, in.P, out.delta_P);
 		memcpy(out.message, "Alarm   ", 8);
 		out.valve_open = false;
 		out.leak_alarm_on = true;
@@ -204,6 +252,7 @@ namespace flood_saver {
 
 	void StateMachine::valve_closed_muted(const Inputs& in, Outputs& out) {
 
+    pressure_accumulator.update(in.delta_t, in.P, out.delta_P);
 		memcpy(out.message, "Muted   ", 8);
 		out.alarm_audio_on = false;
 
@@ -220,4 +269,5 @@ namespace flood_saver {
 	const uint32_t StateMachine::T_VALVE_OPEN_AWAY		(30000);
 	const uint32_t StateMachine::T_VALVE_OPEN_HOME		(1200000);
 	const uint32_t StateMachine::T_LEAK_TIMEOUT			(10);
+  PressureAccumulator StateMachine::pressure_accumulator(5000);
 }

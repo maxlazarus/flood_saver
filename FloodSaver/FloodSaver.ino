@@ -40,8 +40,6 @@
 
 		Button 1 connected to Arduino D3 mutes audio alarms and resets alarms
 		Button 0 switches between Home and Away modes
-		Sampling time is set to 1 second, so 50 measurements are needed to set the leak alarm
-			* This number can be altered in the 'state.h' file, T_LEAK_TIMEOUT at bottom of file
 */
 
 #include <LiquidCrystal.h>
@@ -77,6 +75,7 @@ const byte // System IO pins
 	pressure_pin	= A0;
 
 // I/O state variables
+uint16_t flash_timer;
 byte button_0, button_1;
 int32_t last_P, pressure_reading_mpsi;
 volatile bool button_0_pressed, button_1_pressed;
@@ -87,6 +86,9 @@ uint32_t last_time, current_time, time_elapsed_ms;
 flood_saver::StateMachine state_machine;
 flood_saver::Inputs inputs;
 flood_saver::Outputs outputs;
+
+// Timer-like things
+flood_saver::Accumulator led_timer(500); // 1 Hz 
 
 void setup() {
 
@@ -125,9 +127,15 @@ void setup() {
 }
 
 void read_pressure_and_time(int32_t& P_mpsi,  uint32_t& delta_t_ms) {
+  
+  // 0.2V - 0 PSI, 4.7V - 101.2 PSI
+  //  41H - 0 PSI, 962H - 101.2 PSI
+  auto pressure = analogRead(pressure_pin);
 
-	// This reading is not accurate right now, adjust for actual sensor later
-	P_mpsi = 99 * static_cast<int32_t>(analogRead(pressure_pin));
+  if (pressure < 41)
+    P_mpsi = 0;
+  else 
+	  P_mpsi = 110 * static_cast<int32_t>(pressure - 41);
 	current_time = millis();
 	delta_t_ms = current_time - last_time;
 	last_time = current_time;
@@ -135,7 +143,7 @@ void read_pressure_and_time(int32_t& P_mpsi,  uint32_t& delta_t_ms) {
 
 void loop() {
 
-	// Read pressure and time, swap variables for pressure difference calc
+	// Read pressure and time
 	read_pressure_and_time(inputs.P, inputs.delta_t);
 
 	// Input switch data, button 1 is momentary on, button 0 toggles
@@ -144,15 +152,14 @@ void loop() {
 
   inputs.reset_button = false;
   if (button_1_pressed && (digitalRead(button_1_pin) == 0)) {
-    if ((this_time - last_time_button_1) > DEBOUNCE_MS) {
-      inputs.reset_button = true;
-    }
-    last_time_button_1 = this_time;
+	if ((this_time - last_time_button_1) > DEBOUNCE_MS) {
+	  inputs.reset_button = true;
+	}
+	last_time_button_1 = this_time;
   }
-  
   if (button_0_pressed && (digitalRead(button_0_pin) == 0)) {
-    if ((this_time - last_time_button_0) > DEBOUNCE_MS) inputs.away_switch_on = !inputs.away_switch_on;
-    last_time_button_0 = this_time;
+	if ((this_time - last_time_button_0) > DEBOUNCE_MS) inputs.away_switch_on = !inputs.away_switch_on;
+	last_time_button_0 = this_time;
   }
 	button_0_pressed = button_1_pressed = false; // Reset momentary switch inputs
 	
@@ -185,28 +192,46 @@ void loop() {
 	else
 		lcd.print("Home");
 
+	int32_t flow_rate = (-396 * outputs.delta_P) / 10;
+
 	// Print current pressure
 	lcd.setCursor(0, 1);
-	lcd.print("P:");
 	lcd.print(inputs.P / 1000);
-	lcd.print(".");
-	lcd.print((inputs.P / 100) % 10);
-	lcd.print("  ");
+	lcd.print("PSI   ");
+
+  char pressure_diff[8];
 
 	// Print current pressure differential
-	lcd.setCursor(9, 1);
-	lcd.write(byte(0));
-	lcd.print(":");
-	if (outputs.delta_P < 0) lcd.print("-");
-	lcd.print(abs(outputs.delta_P / 1000));
+	lcd.setCursor(7, 1);
+  if (flow_rate > 1000000 or flow_rate < -100000)
+    lcd.print("");
+	else if (flow_rate > 100000 or flow_rate < -10000)
+	  lcd.print(" ");
+  else if (abs(flow_rate) > 10000 or flow_rate < -100)
+    lcd.print("  ");
+  else
+    lcd.print("   ");
+	// lcd.write(byte(0));
+	// lcd.print(":");
+	if (flow_rate < 0) lcd.print("-");
+	lcd.print(abs(flow_rate / 1000));
 	lcd.print(".");
-	lcd.print(abs(outputs.delta_P / 100) % 10);
-	lcd.print("  ");
+	lcd.print(abs(flow_rate / 100) % 10);
+	lcd.print("L/h  ");
 
 	// Translate outputs from state machine into real world
 	digitalWrite(valve_pin, outputs.valve_open);
-	digitalWrite(led_red_pin, outputs.leak_alarm_on || outputs.water_source_alarm_on);
 	digitalWrite(buzzer_pin, outputs.alarm_audio_on);
+
+  // Pulse LEDs
+  led_timer.update(100);
+
+  if (led_timer.overflows() % 2 == 0) {
+    led_timer.reset_keep_remainder();
+    digitalWrite(led_red_pin, outputs.leak_alarm_on || outputs.water_source_alarm_on);
+  } else if (led_timer.overflows() == 1) {
+    digitalWrite(led_red_pin, LOW);
+  }
 
 	wdt_reset();
 
