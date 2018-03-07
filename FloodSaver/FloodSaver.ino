@@ -147,20 +147,20 @@ void loop() {
 	read_pressure_and_time(inputs.P, inputs.delta_t);
 
 	// Input switch data, button 1 is momentary on, button 0 toggles
-  uint32_t this_time = millis();
-  const uint32_t DEBOUNCE_MS = 250;
+	uint32_t this_time = millis();
+	const uint32_t DEBOUNCE_MS = 250;
 
-  inputs.reset_button = false;
-  if (button_1_pressed && (digitalRead(button_1_pin) == 0)) {
-	if ((this_time - last_time_button_1) > DEBOUNCE_MS) {
-	  inputs.reset_button = true;
+	inputs.reset_button = false;
+	if (button_1_pressed && (digitalRead(button_1_pin) == 0)) {
+		if ((this_time - last_time_button_1) > DEBOUNCE_MS) {
+			inputs.reset_button = true;
+		}
+		last_time_button_1 = this_time;
 	}
-	last_time_button_1 = this_time;
-  }
-  if (button_0_pressed && (digitalRead(button_0_pin) == 0)) {
-	if ((this_time - last_time_button_0) > DEBOUNCE_MS) inputs.away_switch_on = !inputs.away_switch_on;
-	last_time_button_0 = this_time;
-  }
+	if (button_0_pressed && (digitalRead(button_0_pin) == 0)) {
+		if ((this_time - last_time_button_0) > DEBOUNCE_MS) inputs.away_switch_on = !inputs.away_switch_on;
+		last_time_button_0 = this_time;
+ 	}
 	button_0_pressed = button_1_pressed = false; // Reset momentary switch inputs
 	
 
@@ -199,18 +199,18 @@ void loop() {
 	lcd.print(inputs.P / 1000);
 	lcd.print("PSI   ");
 
-  char pressure_diff[8];
+	char pressure_diff[8];
 
 	// Print current pressure differential
 	lcd.setCursor(7, 1);
-  if (flow_rate > 1000000 or flow_rate < -100000)
-    lcd.print("");
+  	if (flow_rate > 1000000 or flow_rate < -100000)
+		lcd.print("");
 	else if (flow_rate > 100000 or flow_rate < -10000)
-	  lcd.print(" ");
-  else if (abs(flow_rate) > 10000 or flow_rate < -100)
-    lcd.print("  ");
-  else
-    lcd.print("   ");
+		lcd.print(" ");
+	else if (abs(flow_rate) > 10000 or flow_rate < -100)
+		lcd.print("  ");
+	else
+    	lcd.print("   ");
 	// lcd.write(byte(0));
 	// lcd.print(":");
 	if (flow_rate < 0) lcd.print("-");
@@ -223,19 +223,19 @@ void loop() {
 	digitalWrite(valve_pin, outputs.valve_open);
 	digitalWrite(buzzer_pin, outputs.alarm_audio_on);
 
-  // Pulse LEDs
-  led_timer.update(100);
+	// Pulse LEDs
+	led_timer.update(100);
 
-  if (led_timer.overflows() % 2 == 0) {
-    led_timer.reset_keep_remainder();
-    digitalWrite(led_red_pin, outputs.leak_alarm_on || outputs.water_source_alarm_on);
-  } else if (led_timer.overflows() == 1) {
-    digitalWrite(led_red_pin, LOW);
-  }
+	if (led_timer.overflows() % 2 == 0) {
+		led_timer.reset_keep_remainder();
+		digitalWrite(led_red_pin, outputs.leak_alarm_on || outputs.water_source_alarm_on);
+	} else if (led_timer.overflows() == 1) {
+		digitalWrite(led_red_pin, LOW);
+	}
 
 	wdt_reset();
 
-  _delay_ms(100);
+	_delay_ms(100);
 }
 
 ISR(WDT_vect) {
