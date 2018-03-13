@@ -1,7 +1,7 @@
 #pragma once
 #include "Arduino.h"
 /*
-	Name:		state.hpp
+	Name:		state.h
 	Created:	8/16/2017 9:06:19 PM
 	Author:	Maxim Prokopenko
 
@@ -66,7 +66,7 @@ namespace flood_saver {
 			i += elapsed;
 			if (last_P == 0) {
 				last_P = P;
-			} else if (last_P - P > 4000) {//overflows() > 0) {
+			} else if (last_P - P > 4000) {
 				flow_rate_result = (1000 * (P - last_P)) / static_cast<int32_t>(i);
 				last_P = P;
 				i = 0;
@@ -161,7 +161,10 @@ namespace flood_saver {
 		out.message[6] = first_digit == '0'? ' ' : first_digit;
 		out.message[7] = second_digit;
 
-    	if (pressure_accumulator.update(in.delta_t, in.P, out.delta_P)) {
+    	if (in.P < P_VALVE_CLOSED_MIN) {
+            current_state = &StateMachine::valve_open_counting;
+        }
+        else if (pressure_accumulator.update(in.delta_t, in.P, out.delta_P)) {
     		// Pressure accumulator has overflowed
     		timer_1 += 1;  
 		  	if (out.delta_P < DELTA_P_USE_MIN) {
@@ -170,9 +173,6 @@ namespace flood_saver {
 		  	else if (out.delta_P > DELTA_P_QUIESCENT_MAX) {
 				current_state = &StateMachine::valve_closed_reset;
 			}
-    	}
-    	else if (in.P < P_VALVE_CLOSED_MIN) {
-			current_state = &StateMachine::valve_open_counting;
     	}
     	if (timer_1 >= T_LEAK_TIMEOUT) {
 			current_state = &StateMachine::valve_closed_alarmed;
@@ -274,7 +274,7 @@ namespace flood_saver {
 
 	const uint32_t StateMachine::T_VALVE_OPEN_AWAY		(30000);
 	const uint32_t StateMachine::T_VALVE_OPEN_HOME		(1200000);
-	const uint32_t StateMachine::T_LEAK_TIMEOUT			(3);
+	const uint32_t StateMachine::T_LEAK_TIMEOUT			(10);
   	
   	PressureAccumulator StateMachine::pressure_accumulator(2000);
 }

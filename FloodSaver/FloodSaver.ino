@@ -42,6 +42,8 @@
 		Button 0 switches between Home and Away modes
 */
 
+#define FLOW_RATE_CONVERSION 1260 // 10*L-s/h-psi 
+
 #include <LiquidCrystal.h>
 #include "state.h"
 #include <avr/wdt.h>
@@ -192,7 +194,7 @@ void loop() {
 	else
 		lcd.print("Home");
 
-	int32_t flow_rate = (-396 * outputs.delta_P) / 10;
+	int32_t flow_rate = (-FLOW_RATE_CONVERSION * outputs.delta_P) / 10;
 
 	// Print current pressure
 	lcd.setCursor(0, 1);
